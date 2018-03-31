@@ -2,6 +2,8 @@
 usage: python gen_diff.py -h
 '''
 
+# %run gen_diff.py light 1 0.1 10 20 50 0
+
 from __future__ import print_function
 
 import argparse
@@ -47,7 +49,7 @@ model_layer_dict1, model_layer_dict2, model_layer_dict3 = init_coverage_tables(m
 # ==============================================================================================
 # start gen inputs
 img_paths = image.list_pictures('./testing/center', ext='jpg')
-for _ in xrange(args.seeds):
+for _ in range(args.seeds):
     gen_img = preprocess_image(random.choice(img_paths))
     orig_img = gen_img.copy()
     # first check if input already induces differences
@@ -112,7 +114,7 @@ for _ in xrange(args.seeds):
     iterate = K.function([input_tensor], [loss1, loss2, loss3, loss1_neuron, loss2_neuron, loss3_neuron, grads])
 
     # we run gradient ascent for 20 steps
-    for iters in xrange(args.grad_iterations):
+    for iters in range(args.grad_iterations):
         loss_value1, loss_value2, loss_value3, loss_neuron1, loss_neuron2, loss_neuron3, grads_value = iterate(
             [gen_img])
         if args.transformation == 'light':
