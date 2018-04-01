@@ -6,6 +6,9 @@ from keras import backend as K
 from keras.applications.vgg16 import preprocess_input, decode_predictions
 from keras.models import Model
 from keras.preprocessing import image
+import cv2
+from skimage.transform import rescale, resize
+img_rows, img_cols = 224, 224
 
 
 def preprocess_image(img_path):
@@ -62,6 +65,71 @@ def constraint_black(gradients, rect_shape=(10, 10)):
     return new_grads
 
 
+def constraint_lightcontrast(gradients):
+    grad_mean = np.mean(gradients)
+    print("grad_mean:", 1 + grad_mean)
+    return 1 + grad_mean
+
+
+def constraint_darkcontrast(gradients):
+    # new_grads = np.ones_like(gradients)
+    grad_mean = np.mean(gradients)
+    print("grad_mean:", grad_mean)
+    # print(new_grads.shape)
+    return grad_mean
+
+
+def constraint_translate(image, gradients, step):
+    img_shape = image.shape
+    trans = np.mean(gradients) * step
+    print("translate pixels:", trans)
+    M = np.float32([[1, 0, trans], [0, 1, trans]])
+    image = image.reshape((img_rows, img_cols, 1))
+    gen_img = cv2.warpAffine(image, M, (img_rows, img_cols))
+    return gen_img.reshape(img_shape)
+
+
+def constraint_rotate(image, gradients, step):
+    img_shape = image.shape
+    print("rotate degrees:", step * np.mean(gradients))
+    M = cv2.getRotationMatrix2D((img_rows / 2, img_cols / 2),
+                                step * np.mean(gradients), 1)
+    image = image.reshape((img_rows, img_cols, 3))
+    gen_img = cv2.warpAffine(image, M, (img_rows, img_cols))
+    return gen_img.reshape(img_shape)
+
+
+def constraint_scale(image, gradients, step):
+    img_shape = image.shape
+    scale = min(abs(step * np.mean(gradients)), 1.2)
+    print("scale:", scale)
+    # if scale > 1.2:
+    #     scale = 1.2
+    image = image.reshape((img_rows, img_cols, 3))
+    # dim = ((int)(img_rows * 1.1), (int)(img_cols * 1.1))
+    # gen_img = cv2.cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
+    # gen_img = cv2.cv2.resize(image, (28, 28), interpolation=cv2.INTER_AREA)
+    # gen_img = rescale(image, 1.1)
+    # gen_img = resize(image, (28, 28))
+    M = cv2.getRotationMatrix2D((img_rows / 2, img_cols / 2), 1, scale)
+    gen_img = cv2.warpAffine(image, M, (img_rows, img_cols))
+    return gen_img.reshape(img_shape)
+
+
+def constraint_shear(image, gradients, step):
+    img_shape = image.shape
+    image = image.reshape((img_rows, img_cols, 3))
+    shear = min(step * np.mean(gradients), 0.2)
+    print("shar:", shear)
+    # if scale > 1.2:
+    #     scale = 1.2
+    # Create Afine transform
+    M = trans.AffineTransform(shear=shear)
+    # Apply transform to image data
+    gen_img = trans.warp(image, inverse_map=M)
+    return gen_img.reshape(img_shape)
+
+
 def init_coverage_tables(model1, model2, model3):
     model_layer_dict1 = defaultdict(bool)
     model_layer_dict2 = defaultdict(bool)
@@ -112,7 +180,7 @@ def update_coverage(input_data, model, model_layer_dict, threshold=0):
 
     for i, intermediate_layer_output in enumerate(intermediate_layer_outputs):
         scaled = scale(intermediate_layer_output[0])
-        for num_neuron in xrange(scaled.shape[-1]):
+        for num_neuron in range(scaled.shape[-1]):
             if np.mean(scaled[..., num_neuron]) > threshold and not model_layer_dict[(layer_names[i], num_neuron)]:
                 model_layer_dict[(layer_names[i], num_neuron)] = True
 

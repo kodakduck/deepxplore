@@ -34,7 +34,6 @@ config.gpu_options.allow_growth = True
 session = tf.Session(config=config)
 
 import sys
-
 import logging
 log = logging.getLogger()
 log.setLevel(logging.INFO)

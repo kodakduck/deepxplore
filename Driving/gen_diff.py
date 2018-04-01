@@ -6,18 +6,40 @@ usage: python gen_diff.py -h
 
 from __future__ import print_function
 
+import warnings
+# h5py will issue a warning about deprecated np.float, ignore it
+warnings.filterwarnings(action='ignore', category=FutureWarning)
+
 import argparse
 
 from scipy.misc import imsave
 
 from driving_models import *
 from utils import *
+import tensorflow as tf
+# On windows, currently tensorflow does not allocate all available memory like it says in the documentation
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
+
+import sys
+import logging
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+log.addHandler(ch)
 
 # read the parameter
 # argument parsing
 parser = argparse.ArgumentParser(
     description='Main function for difference-inducing input generation in Driving dataset')
-parser.add_argument('transformation', help="realistic transformation type", choices=['light', 'occl', 'blackout'])
+parser.add_argument('transformation', help="realistic transformation type",
+                    choices=['light', 'occl', 'blackout', 'contrast', 'rotate',
+                             'translate', 'scale', 'shear', 'darkcontrast'])
 parser.add_argument('weight_diff', help="weight hyperparm to control differential behavior", type=float)
 parser.add_argument('weight_nc', help="weight hyperparm to control neuron coverage", type=float)
 parser.add_argument('step', help="step size of gradient descent", type=float)
