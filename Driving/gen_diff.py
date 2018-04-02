@@ -219,7 +219,10 @@ for _ in range(args.seeds):
             camera_img = cv2.imread(orig_path.replace('/', '\\'), -1)
             # camera_img = cv2.imread(random.choice(img_paths), -1)
             camera_img = cv2.resize(camera_img, (100, 100))
-            gen_img = constraint_blur(camera_img)
+            # gen_img = constraint_blur(camera_img)
+            args.step = 200
+            gen_img = constraint_blur2(camera_img, grads_value, args.step)
+
             cv2.imwrite("merged.png", gen_img)
             gen_img = preprocess_image("merged.png")
 

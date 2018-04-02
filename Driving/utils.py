@@ -10,7 +10,7 @@ from keras.applications.imagenet_utils import preprocess_input
 from keras.models import Model
 from keras.preprocessing import image
 from skimage import transform as trans
-
+from scipy.ndimage.filters import gaussian_filter
 import sys
 import logging
 log = logging.getLogger()
@@ -204,6 +204,13 @@ def constraint_blur(img):
     img = cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
     img = cv2.blur(img, (3, 3))
     return img
+
+
+def constraint_blur2(gen_img, gradients, step_size):
+    mean_grads =gradients.mean()
+    sigma = 0.3 + np.abs(mean_grads)*step_size
+    new_img = gaussian_filter(gen_img,sigma)
+    return new_img
 
 
 def blend_non_transparent(face_img, overlay_img):
