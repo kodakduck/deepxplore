@@ -11,6 +11,18 @@ from keras.models import Model
 from keras.preprocessing import image
 from skimage import transform as trans
 
+import sys
+import logging
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+log.addHandler(ch)
+
+
 def draw_arrow(img, angle1, angle2, angle3):
     pt1 = (int(img.shape[1] / 2), int(img.shape[0]))
     pt2_angle1 = (int(img.shape[1] / 2 - img.shape[0] / 3 * math.sin(angle1)),
@@ -160,6 +172,66 @@ def constraint_shear(image, gradients, step):
     return gen_img.reshape(img_shape)
 
 
+def blend_transparent(camera_img, overlay_t_img, gradients, rect):
+    # Split out the transparency mask from the colour info
+    overlay_img = overlay_t_img[:,:,:3] # Grab the BRG planes
+    overlay_mask = overlay_t_img[:,:,3:]  # And the alpha plane
+
+    # change transparency based on gradient
+    patch = gradients[:, rect[0]:rect[1], rect[2]:rect[3]]
+    grad_mean = np.mean(patch)
+    if grad_mean < 0:
+        overlay_mask *= (1-grad_mean * 255).astype(np.uint8)
+
+    # Again calculate the inverse mask
+    background_mask = 255 - overlay_mask
+
+    # Turn the masks into three channel, so we can use them as weights
+    overlay_mask = cv2.cvtColor(overlay_mask, cv2.COLOR_GRAY2BGR)
+    background_mask = cv2.cvtColor(background_mask, cv2.COLOR_GRAY2BGR)
+
+    # Create a masked out camera image, and masked out overlay
+    # We convert the images to floating point in range 0.0 - 1.0
+    face_part = (camera_img * (1 / 255.0)) * (background_mask * (1 / 255.0))
+    overlay_part = (overlay_img * (1 / 255.0)) * (overlay_mask * (1 / 255.0))
+
+    log.info('Working on blending, current iter mean gradient is '+str(grad_mean))
+    # And finally just add them together, and rescale it back to an 8bit integer image
+    return np.uint8(cv2.addWeighted(face_part, 255.0, overlay_part, 255.0, 0.0))
+
+
+def constraint_blur(img):
+    img = cv2.erode(img, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+    img = cv2.blur(img, (3, 3))
+    return img
+
+
+def blend_non_transparent(face_img, overlay_img):
+    # Let's find a mask covering all the non-black (foreground) pixels
+    # NB: We need to do this on grayscale version of the image
+    gray_overlay = cv2.cvtColor(overlay_img, cv2.COLOR_BGR2GRAY)
+    overlay_mask = cv2.threshold(gray_overlay, 1, 255, cv2.THRESH_BINARY)[1]
+
+    # Let's shrink and blur it a little to make the transitions smoother...
+    overlay_mask = cv2.erode(overlay_mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+    overlay_mask = cv2.blur(overlay_mask, (3, 3))
+
+    # And the inverse mask, that covers all the black (background) pixels
+    background_mask = 255 - overlay_mask
+
+    # Turn the masks into three channel, so we can use them as weights
+    overlay_mask = cv2.cvtColor(overlay_mask, cv2.COLOR_GRAY2BGR)
+    background_mask = cv2.cvtColor(background_mask, cv2.COLOR_GRAY2BGR)
+
+    # Create a masked out face image, and masked out overlay
+    # We convert the images to floating point in range 0.0 - 1.0
+    face_part = (face_img * (1 / 255.0)) * (background_mask * (1 / 255.0))
+    overlay_part = (overlay_img * (1 / 255.0)) * (overlay_mask * (1 / 255.0))
+
+    # And finally just add them together, and rescale it back to an 8bit integer image
+    return np.uint8(cv2.addWeighted(face_part, 255.0, overlay_part, 255.0, 0.0))
+
+
 def init_coverage_tables(model1, model2, model3):
     model_layer_dict1 = defaultdict(bool)
     model_layer_dict2 = defaultdict(bool)
@@ -235,3 +307,4 @@ def diverged(predictions1, predictions2, predictions3, target):
     if not predictions1 == predictions2 == predictions3:
         return True
     return False
+
